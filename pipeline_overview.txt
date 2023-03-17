@@ -1,0 +1,9 @@
+C++ library to python module
+Goal - get cv::Mat from C++ side using Python 
+Issues
+    Pybind11 usually uses cmake. I want to use Makefile - Solution https://stackoverflow.com/questions/47678976/how-to-embedding-python-in-c-with-pybind-and-make-instead-of-cmake
+    You can't cast cv::MAT t
+
+Tutorials
+https://stackoverflow.com/questions/47678976/how-to-embedding-python-in-c-with-pybind-and-make-instead-of-cmake
+https://jdhao.github.io/2021/08/17/pybind11_first_impression/
