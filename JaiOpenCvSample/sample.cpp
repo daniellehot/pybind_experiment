@@ -1,5 +1,6 @@
 // include pybind11 header files so that we can use PYBIND11_MODULE macro
 #include <pybind11/pybind11.h>
+#include <pybind11/eigen.h>
 namespace py = pybind11;
 
 #include <Eigen/Dense>
@@ -18,7 +19,7 @@ namespace py = pybind11;
 #include <PvPipeline.h>
 #include <PvBuffer.h>
 
-cv::Mat readImage(){
+Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic> readImage(){
   //Sanity check
   cout<<"This is written from readImage()"<<endl;
   int test = 12 + 45;
@@ -31,13 +32,17 @@ cv::Mat readImage(){
   m(1,1) = m(1,0) + m(0,1);
   std::cout << "Here is the matrix m:\n" << m << std::endl;
   //Opencv check
-  cv::Mat img = cv::imread("../img.bmp");
+  cv::Mat bgr_img = cv::imread("../img.bmp");
+  cv::Mat img;
+  cv::cvtColor(bgr_img, img, cv::COLOR_BGR2GRAY);
   std::cout << "Img shape " << img.rows << "X" << img.cols << endl;
+  //Eigen matrix
+  //Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic> eigen_mat;
   Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic> eigen_mat;
   cv::cv2eigen(img, eigen_mat);
   cout<<eigen_mat.rows()<<endl;
   cout<<eigen_mat.cols()<<endl;
-  return img;
+  return eigen_mat;
 }
 
 PYBIND11_MODULE(sample, cppCV) {
