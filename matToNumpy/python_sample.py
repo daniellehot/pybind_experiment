@@ -1,9 +1,8 @@
-import sample
+import converter as c
 import cv2 as cv
 import numpy as np
 
-img = sample.readImage()
-img=img.astype(int)
+img = c.readImage()
 print("Python sample")
 print(type(img))
 print(img.shape)
