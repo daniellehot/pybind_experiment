@@ -9,3 +9,6 @@ print(img.shape)
 print(img.dtype)
 cv.imshow("temp", img)
 cv.waitKey(0)
+
+p = c.Pet("Pes")
+print(p.getName())
