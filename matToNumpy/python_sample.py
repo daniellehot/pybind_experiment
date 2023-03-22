@@ -12,3 +12,7 @@ cv.waitKey(0)
 
 p = c.Pet("Pes")
 print(p.getName())
+
+r = c.Rectangle()
+r.set_values(5, 2)
+print(r.area())

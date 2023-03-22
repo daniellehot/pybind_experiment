@@ -114,9 +114,9 @@ PYBIND11_MODULE(converter, cppCV) {
         .def("setName", &Pet::setName)
         .def("getName", &Pet::getName);
 
-    /*py::class<Rectangle>(cppCV, "Rectangle")
+    py::class_<Rectangle>(cppCV, "Rectangle")
         .def(py::init<>())
         .def("set_values", &Rectangle::set_values)
-        .def("area", &Regtangle::area);*/
+        .def("area", &Rectangle::area);
 }
 
