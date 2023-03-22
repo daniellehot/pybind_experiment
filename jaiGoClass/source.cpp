@@ -12,7 +12,7 @@
 #include "opencv2/opencv.hpp"
 #include "opencv2/highgui/highgui.hpp"
 
-PV_INIT_SIGNAL_HANDLER();
+//PV_INIT_SIGNAL_HANDLER();
 
 #define BUFFER_COUNT ( 16 )
 
@@ -23,18 +23,15 @@ PV_INIT_SIGNAL_HANDLER();
 class JaiGo {
     private:
         PvString ConnectionID;
-        PvDevice *Device;
-        bool Connected = false;
+        PvDevice *Device = NULL;
 
-        PvStream *Stream;
-        PvPipeline *Pipeline;
-        bool Streaming = false;
-
-        PvGenCommand *StartCommand;
-        PvGenCommand *StopCommand;
+        PvStream *Stream = NULL;
+        PvPipeline *Pipeline = NULL;
         
-        double FrameRateVal = 0.0; 
-        double BandwidthVal = 0.0;
+        PvGenCommand *StartCommand = NULL;
+        PvGenCommand *StopCommand = NULL;
+        PvGenFloat *FrameRate = NULL;
+        PvGenFloat *Bandwidth = NULL;
 
         //Find and Connect
         bool FindDevice( PvString *aConnectionID);
@@ -48,9 +45,19 @@ class JaiGo {
         void AcquireImages( PvDevice *aDevice, PvStream *aStream, PvPipeline *aPipeline );
 
     public:
+        bool Connected = false;
+        bool Streaming = false;
+
+        //Stream statistics
+        double FrameRateVal = 0.0;
+        double BandwidthVal = 0.0;
+        //Image
+        int ImgWidth;
+        int ImgHeight;
+        cv::Mat Img;
         void FindAndConnect();
         void StartStream();
-        cv::Mat* GetImage();
+        bool GetImage();
         void CloseAndDisconnect();
 };
 
@@ -140,14 +147,14 @@ void JaiGo::StartStream()
     if ( lStream != NULL )
     {
         this->Stream = lStream;
-        if (JaiGo::LoadDeviceAndStreamConfiguration(this->Device, this->Stream))
+        //if (JaiGo::LoadDeviceAndStreamConfiguration(this->Device, this->Stream))
+        if (true)
         {
             PvPipeline *lPipeline = NULL;
             lPipeline = JaiGo::CreatePipeline(this->Device, lStream );
             if( lPipeline )
             {
                 this->Pipeline = lPipeline;
-                this->Streaming = true;
 
                 // Get device parameters need to control streaming
                 PvGenParameterArray *lDeviceParams = this->Device->GetParameters();
@@ -164,15 +171,16 @@ void JaiGo::StartStream()
                 PvGenParameterArray *lStreamParams = this->Stream->GetParameters();
 
                 // Map a few GenICam stream stats counters
-                PvGenFloat *lFrameRate = dynamic_cast<PvGenFloat *>( lStreamParams->Get( "AcquisitionRate" ) );
-                PvGenFloat *lBandwidth = dynamic_cast<PvGenFloat *>( lStreamParams->Get( "Bandwidth" ) );
+                this->FrameRate = dynamic_cast<PvGenFloat *>( lStreamParams->Get( "AcquisitionRate" ) );
+                this->Bandwidth = dynamic_cast<PvGenFloat *>( lStreamParams->Get( "Bandwidth" ) );
 
                 // Enable streaming and send the AcquisitionStart command
                 cout << "Enabling streaming and sending AcquisitionStart command." << endl;
                 this->Device->StreamEnable();
                 this->StartCommand->Execute();
+
+                this->Streaming = true;
             }
-            
         }
     }
 
@@ -238,96 +246,140 @@ PvPipeline* JaiGo::CreatePipeline( PvDevice *aDevice, PvStream *aStream )
     return lPipeline;
 }
 
-cv::Mat* JaiGo::GetImage()
-{
-    
-    while ( !PvKbHit() )
+bool JaiGo::GetImage()
+{ 
+    //while loop scope
+    bool receivedImage = false;
+    PvBuffer *lBuffer = NULL;
+    PvResult lOperationResult;
+
+    // Retrieve next buffer
+    PvResult lResult = this->Pipeline->RetrieveNextBuffer( &lBuffer, 1000, &lOperationResult );
+    if ( lResult.IsOK() )
     {
-        PvBuffer *lBuffer = NULL;
-        PvResult lOperationResult;
-
-        // Retrieve next buffer
-        PvResult lResult = aPipeline->RetrieveNextBuffer( &lBuffer, 1000, &lOperationResult );
-        if ( lResult.IsOK() )
+        if ( lOperationResult.IsOK() )
         {
-            if ( lOperationResult.IsOK() )
+            //
+            // We now have a valid buffer. This is where you would typically process the buffer.
+            // -----------------------------------------------------------------------------------------
+            // ...
+            this->FrameRate->GetValue( this->FrameRateVal );
+            this->Bandwidth->GetValue( this->BandwidthVal );
+            this->BandwidthVal /= 1000000.0; //Conversion to Mb 
+
+            if (lBuffer->GetPayloadType() == PvPayloadTypeImage)
             {
-                //
-                // We now have a valid buffer. This is where you would typically process the buffer.
-                // -----------------------------------------------------------------------------------------
-                // ...
-                lFrameRate->GetValue( this->FrameRateVal );
-                lBandwidth->GetValue( this->BandwidthVal );
-
-
-                if (lBuffer->GetPayloadType() == PvPayloadTypeImage)
-                {
-                    cout << "W: " << dec << lBuffer->GetImage()->GetWidth() << " H: " << lBuffer->GetImage()->GetHeight();
-                    cout << "  " << FrameRateVal << " FPS  " << ( BandwidthVal / 1000000.0 ) << " Mb/s   \r";
-                    cv::Mat openCvImage = cv::Mat(lBuffer->GetImage()->GetHeight(), lBuffer->GetImage()->GetWidth(), CV_8U, lBuffer->GetDataPointer());
-                    cv::Mat colorImg;
-                    cvtColor(openCvImage, colorImg, cv::COLOR_BayerRG2RGB);
-                    imshow("Img", colorImg);
-                    cv::waitKey(1);
-                } 
-                else
-                {
-                    cout<< "Incorrect payload type. Start stream with PvPayloadTypeImage. Current type is " << lBuffer->GetPayloadType();
-                }
-            }
+                this->ImgWidth = lBuffer->GetImage()->GetWidth();
+                this->ImgHeight = lBuffer->GetImage()->GetHeight();
+                
+                cv::Mat cvImg = cv::Mat(lBuffer->GetImage()->GetHeight(), lBuffer->GetImage()->GetWidth(), CV_8U, lBuffer->GetDataPointer());
+                cv::Mat cvColorImg;
+                cvtColor(cvImg, cvColorImg, cv::COLOR_BayerRG2RGB);
+                this->Img = cvColorImg;
+                receivedImage = true;
+                //cv::imshow("test", cvColorImg);
+                //cv::waitKey(1);
+            } 
             else
             {
-                // Non OK operational result
-                cout << lOperationResult.GetCodeString().GetAscii() << "\r";
+                cout<< "Incorrect payload type. Start stream with PvPayloadTypeImage. Current type is " << lBuffer->GetPayloadType() << endl;
             }
-
-            // Release the buffer back to the pipeline
-            aPipeline->ReleaseBuffer( lBuffer );
         }
         else
         {
-            // Retrieve buffer failure
-            cout << lResult.GetCodeString().GetAscii() << "\r";
+            // Non OK operational result
+            cout << lOperationResult.GetCodeString().GetAscii() << endl;
         }
+
+        // Release the buffer back to the pipeline
+        this->Pipeline->ReleaseBuffer( lBuffer );
+    }
+    else
+    {
+        // Retrieve buffer failure
+        cout << lResult.GetCodeString().GetAscii() << "\r";
     }
 
-    PvGetChar(); // Flush key buffer for next stop.
-    cout << endl << endl;
-
-    // Tell the device to stop sending images.
-    cout << "Sending AcquisitionStop command to the device" << endl;
-    lStop->Execute();
-
-    // Disable streaming on the device
-    cout << "Disable streaming on the controller." << endl;
-    aDevice->StreamDisable();
-
-    // Stop the pipeline
-    cout << "Stop pipeline" << endl;
-    aPipeline->Stop();
+    if (receivedImage)
+    {
+        return true;
+    } 
+    else
+    {
+        return false;
+    }
 }
 
 
 void JaiGo::CloseAndDisconnect()
 {   
-    cout << "Deleting pipeline" << endl;
-    delete this->Pipeline;
+    if (this->StopCommand != NULL)
+    {
+        cout << "Sending AcquisitionStop command to the device" << endl;
+        this->StopCommand->Execute();
+    }
 
-    cout << "Closing stream" << endl;
-    this->Stream->Close();
-    PvStream::Free( this->Stream );
-    this->Streaming = false;
+    if (this->Device != NULL)
+    {
+        // Disable streaming on the device
+        cout << "Disable streaming on the controller." << endl;
+        this->Device->StreamDisable();
+    }
 
-    cout << "Disconnecting device" << endl;
-    this->Device->Disconnect();
-    PvDevice::Free( this->Device );
-    this->Connected = false;
+    if (this->Pipeline != NULL)
+    {
+        // Stop the pipeline
+        cout << "Stop pipeline" << endl;
+        this->Pipeline->Stop();
+
+        cout << "Deleting pipeline" << endl;
+        delete this->Pipeline;
+    }
+
+    if (this->Stream != NULL)
+    {
+        cout << "Closing stream" << endl;
+        this->Stream->Close();
+        PvStream::Free( this->Stream );
+        //this->Streaming = false;
+    }
+
+    if (this->Device != NULL)
+    {
+        cout << "Disconnecting device" << endl;
+        this->Device->Disconnect();
+        PvDevice::Free( this->Device );
+        this->Connected = false;
+    }
+
 }
 
 int main() {
     JaiGo camera;
     camera.FindAndConnect();
-    camera.StartStream();
+    if (camera.Connected) 
+    {
+        camera.StartStream();
+        if (camera.Streaming) 
+        {
+            int i = 0;
+            while (camera.Streaming)
+            {   
+                i++;
+                if (i == 100) camera.Streaming = false;
+
+                if ( camera.GetImage() )
+                {
+                    cout<<"Image width "<<camera.ImgWidth<<" Height "<<camera.ImgHeight<<endl;
+                    cout<<"Streaming Bandwidth "<<camera.BandwidthVal<<" Mb/s FPS "<< camera.FrameRateVal<<endl;
+                    imshow("img", camera.Img);
+                    cv::waitKey(1);
+                };
+               
+            };
+        }
+    }
     camera.CloseAndDisconnect();
+
     return 0;
 }
