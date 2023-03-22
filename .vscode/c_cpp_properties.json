@@ -5,7 +5,9 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "/opt/jai/ebus_sdk/Ubuntu-20.04-x86_64/include",
-                "/usr/include/opencv4"
+                "/usr/include/opencv4",
+                "/usr/include/python3.10 ",
+                "/home/daniel/.local/lib/python3.10/site-packages/pybind11/include"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
